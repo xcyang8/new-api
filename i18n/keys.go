@@ -343,3 +343,40 @@ const (
 	MsgCustomOAuthBindingNotFound   = "custom_oauth.binding_not_found"
 	MsgCustomOAuthProviderIdInvalid = "custom_oauth.provider_id_field_invalid"
 )
+
+// System email template messages
+const (
+	MsgEmailVerificationSubject = "email.verification.subject"
+	MsgEmailVerificationTitle   = "email.verification.title"
+	MsgEmailVerificationIntro   = "email.verification.intro"
+
+	MsgEmailPasswordResetSubject      = "email.password_reset.subject"
+	MsgEmailPasswordResetTitle        = "email.password_reset.title"
+	MsgEmailPasswordResetIntro        = "email.password_reset.intro"
+	MsgEmailPasswordResetButton       = "email.password_reset.button"
+	MsgEmailPasswordResetLinkFallback = "email.password_reset.link_fallback"
+	MsgEmailPasswordResetExpiry       = "email.password_reset.expiry"
+	MsgEmailPasswordResetIgnore       = "email.password_reset.ignore"
+
+	MsgEmailBindingSubject         = "email.binding.subject"
+	MsgEmailBindingTitle           = "email.binding.title"
+	MsgEmailBindingConfirmNewIntro = "email.binding.confirm_new_intro"
+	MsgEmailBindingConfirmOldIntro = "email.binding.confirm_old_intro"
+
+	MsgEmailSecuritySubject = "email.security.subject"
+	MsgEmailSecurityTitle   = "email.security.title"
+	MsgEmailSecurityIntro   = "email.security.intro"
+	MsgEmailSecurityAdvice  = "email.security.advice"
+
+	MsgEmailSecurityEventPasswordUpdated      = "email.security.event.password_updated"
+	MsgEmailSecurityEventEmailChanged         = "email.security.event.email_changed"
+	MsgEmailSecurityEventEmailConfirmed       = "email.security.event.email_confirmed"
+	MsgEmailSecurityEventEmailChangeRequested = "email.security.event.email_change_requested"
+	MsgEmailSecurityEventLoginAccountLinked   = "email.security.event.login_account_linked"
+	MsgEmailSecurityEventLoginAccountUnlinked = "email.security.event.login_account_unlinked"
+
+	MsgEmailCodeExpiry = "email.code.expiry"
+	MsgEmailCodeIgnore = "email.code.ignore"
+
+	MsgEmailFooterAutoSent = "email.footer.auto_sent"
+)

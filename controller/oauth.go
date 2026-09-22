@@ -398,7 +398,7 @@ func handleOAuthBind(c *gin.Context, providerName string, provider oauth.Provide
 		writeSecurityOperationError(c, err)
 		return true, true
 	}
-	notificationFailed := service.NotifyAccountSecurityChange(user.Email, "Login account linked: "+provider.GetName()) != nil
+	notificationFailed := service.NotifyAccountSecurityChange(i18n.GetLangFromContext(c), user.Email, i18n.T(c, i18n.MsgEmailSecurityEventLoginAccountLinked, map[string]any{"Provider": provider.GetName()})) != nil
 	common.ApiSuccessI18n(c, i18n.MsgOAuthBindSuccess, gin.H{"action": "bind", "notification_warning": notificationFailed})
 	return true, notificationFailed
 }
@@ -475,7 +475,7 @@ func findOrCreateOAuthUser(c *gin.Context, provider oauth.Provider, oauthUser *o
 			}
 			if written {
 				user.GitHubId = oauthUser.ProviderUserID
-				notificationFailed := service.NotifyAccountSecurityChange(user.Email, "Login account linked: "+provider.GetName()) != nil
+				notificationFailed := service.NotifyAccountSecurityChange(i18n.GetLangFromContext(c), user.Email, i18n.T(c, i18n.MsgEmailSecurityEventLoginAccountLinked, map[string]any{"Provider": provider.GetName()})) != nil
 				recordLegacyGitHubBindingAudit(c, user, true, map[string]any{
 					"legacy_id": legacyID, "provider_user_id": oauthUser.ProviderUserID,
 					"verified_email_matched": true, "notification_failed": notificationFailed,
