@@ -195,14 +195,23 @@ docker-run:
 		$(IMAGE):$(VERSION) --log-dir /app/logs
 	@printf "$(GREEN)>>> 本地服务已启动: http://localhost:$(LOCAL_PORT)$(NC)\n"
 
-## (prod) 同步服务器 make 环境 (安装 make + 上传服务器端 Makefile/compose/deploy.env)
+## (prod) 同步服务器 make 环境 (安装 make + 上传服务器端 Makefile/compose/nginx.conf/deploy.env/ssl)
 server-setup:
 	@printf "$(YELLOW)>>> 同步服务器 make 环境 -> $(SERVER_HOST):$(APP_BASE)...$(NC)\n"
 	$(SSH) $(SERVER_USER)@$(SERVER_HOST) "command -v make >/dev/null 2>&1 || dnf install -y make; mkdir -p $(APP_BASE)"
 	$(SSH) $(SERVER_USER)@$(SERVER_HOST) "if [ -f $(APP_BASE)/.env ] && grep -q '^SERVER_HOST=' $(APP_BASE)/.env && ! grep -q '^POSTGRES_PASSWORD=' $(APP_BASE)/.env; then rm -f $(APP_BASE)/.env && echo '>>> 已清理旧版 .env (make 配置迁移到 deploy.env)'; fi"
 	$(SCP) deploy/Makefile.server $(SERVER_USER)@$(SERVER_HOST):$(APP_BASE)/Makefile
 	$(SCP) deploy/docker-compose.server.yml $(SERVER_USER)@$(SERVER_HOST):$(APP_BASE)/docker-compose.yml
+	$(SCP) deploy/nginx.conf $(SERVER_USER)@$(SERVER_HOST):$(APP_BASE)/nginx.conf
 	$(SCP) env/$(ENV)/.env $(SERVER_USER)@$(SERVER_HOST):$(APP_BASE)/deploy.env
+	@if [ -d env/$(ENV)/ssl ]; then \
+		printf "$(YELLOW)>>> 上传 SSL 证书 env/$(ENV)/ssl/...$(NC)\n"; \
+		$(SSH) $(SERVER_USER)@$(SERVER_HOST) "mkdir -p $(APP_BASE)/ssl && chmod 700 $(APP_BASE)/ssl"; \
+		$(SCP) env/$(ENV)/ssl/* $(SERVER_USER)@$(SERVER_HOST):$(APP_BASE)/ssl/; \
+	else \
+		printf "$(RED)>>> 警告: env/$(ENV)/ssl/ 不存在, nginx 将因缺证书无法启动$(NC)\n"; \
+		printf "$(YELLOW)>>> 请放入 xiaoyule.com.cn.pem / xiaoyule.com.cn.key 后重试$(NC)\n"; \
+	fi
 	@printf "$(GREEN)>>> 服务器 make 环境就绪$(NC)\n"
 
 ## (prod) 初始化全新服务器 (make 环境 + Docker + 日志轮转 + Swap + 目录)

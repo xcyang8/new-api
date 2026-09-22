@@ -44,3 +44,6 @@ relaykit/relayconvert/chat_responses_live_local_test.go
 service/openaicompat/chat_responses_live_local_test.go
 go.work
 go.work.sum
+
+# SSL 证书 (本地放置, make server-setup 上传, 不进 git)
+env/*/ssl/

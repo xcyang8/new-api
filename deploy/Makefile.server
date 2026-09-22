@@ -21,7 +21,7 @@ NC := \e[0m
 # 注意必须用 = 延迟展开, deploy-upstream 的目标特定 IMAGE/VERSION 才能生效
 COMPOSE_ENV = IMAGE=$(IMAGE) VERSION=$(VERSION) APP_BASE=$(APP_BASE) PROD_PORT=$(PORT)
 
-.PHONY: help init secrets deploy deploy-upstream logs stop restart status versions clean db-shell redis-shell
+.PHONY: help init secrets deploy deploy-upstream logs stop restart nginx-reload status versions clean db-shell redis-shell
 
 ## 显示此帮助
 help:
@@ -30,21 +30,22 @@ help:
 	@awk '/^## /{desc=substr($$0,4)} /^[a-zA-Z_-]+:/{cmd=$$1; gsub(/:$$/,"",cmd); if(desc) printf "  make %-16s %s\n", cmd, desc; desc=""}' Makefile
 	@printf "\n当前配置: APP_BASE=$(APP_BASE) PORT=$(PORT) VERSION=$(VERSION)\n"
 
-## 生成服务器密钥 .env (仅首次, 已存在则跳过)
+## 生成服务器密钥 .env (幂等, 仅补充缺失的 key, 已存在的值不覆盖)
 secrets:
-	@if [ -f .env ] && grep -q '^POSTGRES_PASSWORD=' .env; then \
-		printf "$(GREEN)>>> .env 密钥已存在, 跳过$(NC)\n"; \
-	else \
-		printf "$(YELLOW)>>> 生成服务器密钥 .env...$(NC)\n"; \
-		touch .env; \
-		{ \
-			echo "POSTGRES_PASSWORD=$$(openssl rand -hex 24)"; \
-			echo "REDIS_PASSWORD=$$(openssl rand -hex 24)"; \
-			echo "SESSION_SECRET=$$(openssl rand -hex 32)"; \
-		} >> .env; \
-		chmod 600 .env; \
-		printf "$(GREEN)>>> 密钥已生成 (.env, chmod 600)$(NC)\n"; \
-	fi
+	@touch .env; \
+	add_key() { \
+		if ! grep -q "^$$1=" .env; then \
+			echo "$$1=$$2" >> .env; \
+			printf "$(YELLOW)>>> 新增密钥 $$1$(NC)\n"; \
+		fi; \
+	}; \
+	add_key POSTGRES_PASSWORD "$$(openssl rand -hex 24)"; \
+	add_key REDIS_PASSWORD "$$(openssl rand -hex 24)"; \
+	add_key SESSION_SECRET "$$(openssl rand -hex 32)"; \
+	add_key PROXY_USER "proxy_$$(openssl rand -hex 4)"; \
+	add_key PROXY_PASS "$$(openssl rand -hex 24)"; \
+	chmod 600 .env; \
+	printf "$(GREEN)>>> 密钥检查完成 (.env, chmod 600)$(NC)\n"
 
 ## 初始化服务器 (Docker + 日志轮转 + Swap + 目录 + 密钥, 幂等)
 init: secrets
@@ -92,7 +93,7 @@ init: secrets
 	@mkdir -p $(APP_BASE)/data $(APP_BASE)/logs
 	@printf "$(GREEN)>>> 初始化完成$(NC)\n"
 	@free -m | head -2
-	@printf "$(YELLOW)>>> 提醒: 请到云控制台【安全组】放行 $(PORT) 端口 (TCP)$(NC)\n"
+	@printf "$(YELLOW)>>> 提醒: 请到云控制台【安全组】放行 80/443 (nginx) 与 $(PORT) (过渡期 A 站兜底直连) 端口 (TCP)$(NC)\n"
 
 ## 从构建包构建镜像并部署/更新服务 [VERSION=xxx, 回滚同样用此命令]
 deploy: secrets
@@ -132,6 +133,12 @@ stop:
 ## 重启服务 [SERVICE=new-api 只重启应用]
 restart:
 	docker compose restart $(SERVICE)
+
+## 校验并重载 nginx 配置 (证书更新/配置改动后使用, 不断连)
+nginx-reload:
+	docker compose exec nginx nginx -t
+	docker compose exec nginx nginx -s reload
+	@printf "$(GREEN)>>> nginx 已重载$(NC)\n"
 
 ## 查看服务状态
 status:

@@ -31,30 +31,37 @@ export function AuthLayout({ children }: AuthLayoutProps) {
   const { systemName, logo, loading } = useSystemConfig()
 
   return (
-    <div className='relative grid h-svh max-w-none'>
+    <div className='relative flex min-h-svh flex-col items-center justify-center overflow-x-clip px-4 py-10'>
+      {/* Brand glow, echoes the landing page hero */}
+      <div
+        aria-hidden='true'
+        className='pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,rgba(99,102,241,0.16),transparent_70%)] dark:bg-[radial-gradient(60%_50%_at_50%_0%,rgba(99,102,241,0.22),transparent_70%)]'
+      />
       <Link
         to='/'
-        className='absolute top-4 left-4 z-10 flex items-center gap-2 transition-opacity hover:opacity-80 sm:top-8 sm:left-8'
+        className='relative z-10 mb-8 flex flex-col items-center gap-3 transition-opacity hover:opacity-80'
       >
-        <div className='relative h-8 w-8'>
+        <div className='relative h-14 w-14'>
           {loading ? (
-            <Skeleton className='absolute inset-0 rounded-full' />
+            <Skeleton className='absolute inset-0 rounded-2xl' />
           ) : (
             <img
               src={logo}
               alt={t('Logo')}
-              className='h-8 w-8 rounded-full object-cover'
+              className='h-14 w-14 rounded-2xl object-cover shadow-lg shadow-indigo-500/30'
             />
           )}
         </div>
         {loading ? (
-          <Skeleton className='h-6 w-24' />
+          <Skeleton className='h-7 w-28' />
         ) : (
-          <h1 className='text-xl font-medium'>{systemName}</h1>
+          <h1 className='bg-gradient-to-r from-indigo-500 to-violet-500 bg-clip-text text-2xl font-bold tracking-tight text-transparent'>
+            {systemName}
+          </h1>
         )}
       </Link>
-      <div className='container flex items-center pt-16 sm:pt-0'>
-        <div className='mx-auto flex w-full flex-col justify-center space-y-2 px-4 py-8 sm:w-[480px] sm:p-8'>
+      <div className='relative z-10 w-full sm:max-w-md'>
+        <div className='bg-card rounded-2xl border p-6 shadow-xl shadow-indigo-500/5 sm:p-8'>
           {children}
         </div>
       </div>
