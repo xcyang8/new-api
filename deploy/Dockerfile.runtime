@@ -1,0 +1,15 @@
+# new-api 运行时镜像（服务器端构建）
+# 构建上下文由本地 make prod-build 打包上传: 已交叉编译的 new-api 二进制 + 许可文件
+# 与根 Dockerfile 的最终运行阶段保持一致, 但跳过前端/Go 编译, 秒级完成
+FROM debian:bookworm-slim@sha256:f06537653ac770703bc45b4b113475bd402f451e85223f0f2837acbf89ab020a
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates tzdata wget \
+    && rm -rf /var/lib/apt/lists/* \
+    && update-ca-certificates
+
+COPY new-api /new-api
+COPY LICENSE NOTICE THIRD-PARTY-LICENSES.md /licenses/
+EXPOSE 3000
+WORKDIR /data
+ENTRYPOINT ["/new-api"]

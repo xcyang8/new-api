@@ -1,0 +1,82 @@
+# new-api 生产环境 Docker Compose 配置
+# 由本地 make server-setup ENV=prod 上传到服务器 $(APP_BASE)/docker-compose.yml
+# 密钥从同目录 .env 读取 (make secrets 生成, 不会提交/覆盖)
+# 镜像版本由 make deploy VERSION=<git-tag> 指定
+services:
+  new-api:
+    image: ${IMAGE:-new-api}:${VERSION:-latest}
+    container_name: new-api
+    restart: always
+    command: --log-dir /app/logs
+    ports:
+      - "${PROD_PORT:-3000}:3000"
+    volumes:
+      - ${APP_BASE:-/app/new-api}/data:/data
+      - ${APP_BASE:-/app/new-api}/logs:/app/logs
+    environment:
+      - SQL_DSN=postgresql://root:${POSTGRES_PASSWORD:?run make secrets first}@postgres:5432/new-api
+      - REDIS_CONN_STRING=redis://:${REDIS_PASSWORD:?run make secrets first}@redis:6379
+      - SESSION_SECRET=${SESSION_SECRET:?run make secrets first}
+      - TZ=Asia/Shanghai
+      - ERROR_LOG_ENABLED=true
+      - BATCH_UPDATE_ENABLED=true
+      - NODE_NAME=new-api-prod-1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - new-api-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/status | grep -o '\"success\":\\s*true' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    container_name: new-api-redis
+    restart: always
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?run make secrets first}"]
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    ports:
+      # 默认仅绑定回环, 外网访问用 SSH 隧道: ssh -L 6379:localhost:6379 root@<server>
+      # 确需公网暴露时在 .env 设置 DB_BIND_ADDR=0.0.0.0 (务必配合安全组限制来源 IP)
+      - "${DB_BIND_ADDR:-127.0.0.1}:6379:6379"
+    networks:
+      - new-api-network
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:15
+    container_name: new-api-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run make secrets first}
+      POSTGRES_DB: new-api
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      # 同 redis, 默认仅回环, DB_BIND_ADDR=0.0.0.0 可放开
+      - "${DB_BIND_ADDR:-127.0.0.1}:5432:5432"
+    networks:
+      - new-api-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d new-api"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pg_data:
+
+networks:
+  new-api-network:
+    driver: bridge

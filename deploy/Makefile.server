@@ -1,0 +1,157 @@
+# new-api 服务器端 Makefile (compose 编排: new-api + PostgreSQL + Redis)
+# 由本地 make server-setup ENV=prod 上传到服务器 $(APP_BASE)/Makefile
+# 用法: ssh 到服务器后 cd $(APP_BASE) && make <命令>
+# make 配置来自 deploy.env (本地上传); 密钥来自 .env (make secrets 生成, 不上传不覆盖)
+
+-include deploy.env
+
+APP_BASE  := $(or $(APP_BASE),/app/new-api)
+IMAGE     := $(or $(IMAGE),new-api)
+VERSION   := $(or $(VERSION),latest)
+CONTAINER := $(or $(PROD_CONTAINER),new-api)
+PORT      := $(or $(PROD_PORT),3000)
+SWAP_SIZE := $(or $(SWAP_SIZE),2G)
+
+RED := \e[0;31m
+GREEN := \e[0;32m
+YELLOW := \e[0;33m
+NC := \e[0m
+
+# 传递给 docker compose 的替换变量 (compose 还会自动读取 .env 里的密钥)
+# 注意必须用 = 延迟展开, deploy-upstream 的目标特定 IMAGE/VERSION 才能生效
+COMPOSE_ENV = IMAGE=$(IMAGE) VERSION=$(VERSION) APP_BASE=$(APP_BASE) PROD_PORT=$(PORT)
+
+.PHONY: help init secrets deploy deploy-upstream logs stop restart status versions clean db-shell redis-shell
+
+## 显示此帮助
+help:
+	@printf "$(GREEN)new-api 服务器命令 (compose 模式):$(NC)\n"
+	@printf "\n"
+	@awk '/^## /{desc=substr($$0,4)} /^[a-zA-Z_-]+:/{cmd=$$1; gsub(/:$$/,"",cmd); if(desc) printf "  make %-16s %s\n", cmd, desc; desc=""}' Makefile
+	@printf "\n当前配置: APP_BASE=$(APP_BASE) PORT=$(PORT) VERSION=$(VERSION)\n"
+
+## 生成服务器密钥 .env (仅首次, 已存在则跳过)
+secrets:
+	@if [ -f .env ] && grep -q '^POSTGRES_PASSWORD=' .env; then \
+		printf "$(GREEN)>>> .env 密钥已存在, 跳过$(NC)\n"; \
+	else \
+		printf "$(YELLOW)>>> 生成服务器密钥 .env...$(NC)\n"; \
+		touch .env; \
+		{ \
+			echo "POSTGRES_PASSWORD=$$(openssl rand -hex 24)"; \
+			echo "REDIS_PASSWORD=$$(openssl rand -hex 24)"; \
+			echo "SESSION_SECRET=$$(openssl rand -hex 32)"; \
+		} >> .env; \
+		chmod 600 .env; \
+		printf "$(GREEN)>>> 密钥已生成 (.env, chmod 600)$(NC)\n"; \
+	fi
+
+## 初始化服务器 (Docker + 日志轮转 + Swap + 目录 + 密钥, 幂等)
+init: secrets
+	@if command -v docker >/dev/null 2>&1; then \
+		printf "$(GREEN)>>> Docker 已安装, 跳过: $$(docker --version)$(NC)\n"; \
+	else \
+		printf "$(YELLOW)>>> 安装 Docker CE...$(NC)\n"; \
+		(dnf config-manager --add-repo https://mirrors.cloud.aliyuncs.com/docker-ce/linux/centos/docker-ce.repo 2>/dev/null \
+			|| dnf config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo); \
+		RELVER=$$(rpm -E %{rhel}); \
+		if [ "$$RELVER" = "4" ] || [ "$$RELVER" = "9" ]; then COMPAT=9; else COMPAT=8; fi; \
+		sed -i "s|\$$releasever|$$COMPAT|g" /etc/yum.repos.d/docker-ce.repo; \
+		if ! dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin; then \
+			FALLBACK=$$([ "$$COMPAT" = 9 ] && echo 8 || echo 9); \
+			printf "$(YELLOW)>>> centos/$$COMPAT 源失败, 回退 centos/$$FALLBACK...$(NC)\n"; \
+			sed -i "s|centos/$$COMPAT|centos/$$FALLBACK|g" /etc/yum.repos.d/docker-ce.repo; \
+			dnf clean all; \
+			dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin; \
+		fi; \
+		systemctl enable --now docker; \
+		printf "$(GREEN)>>> Docker 安装完成: $$(docker --version)$(NC)\n"; \
+	fi
+	@docker compose version >/dev/null 2>&1 || { \
+		printf "$(YELLOW)>>> 安装 docker compose 插件...$(NC)\n"; \
+		dnf install -y docker-compose-plugin; \
+	}
+	@if ! grep -q 'j41aavw1.mirror.aliyuncs.com' /etc/docker/daemon.json 2>/dev/null; then \
+		printf "$(YELLOW)>>> 写入 /etc/docker/daemon.json (日志轮转 + live-restore + 国内镜像加速)...$(NC)\n"; \
+		mkdir -p /etc/docker; \
+		printf '{\n  "log-driver": "json-file",\n  "log-opts": { "max-size": "100m", "max-file": "3" },\n  "live-restore": true,\n  "registry-mirrors": ["https://j41aavw1.mirror.aliyuncs.com", "https://0025503bcae84085bb453370d1ff37d6.mirror.swr.myhuaweicloud.com", "https://docker.mirrors.ustc.edu.cn", "https://hub-mirror.c.163.com", "https://mirror.baidubce.com"]\n}\n' > /etc/docker/daemon.json; \
+		systemctl restart docker; \
+	else \
+		printf "$(GREEN)>>> daemon.json 已配置镜像加速, 跳过$(NC)\n"; \
+	fi
+	@if swapon --show | grep -q '/swapfile'; then \
+		printf "$(GREEN)>>> Swap 已存在, 跳过$(NC)\n"; \
+	else \
+		printf "$(YELLOW)>>> 创建 $(SWAP_SIZE) Swap...$(NC)\n"; \
+		fallocate -l $(SWAP_SIZE) /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048; \
+		chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile; \
+	fi
+	@grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+	@sysctl -w vm.swappiness=10 > /dev/null
+	@grep -q 'vm.swappiness' /etc/sysctl.conf || echo 'vm.swappiness=10' >> /etc/sysctl.conf
+	@mkdir -p $(APP_BASE)/data $(APP_BASE)/logs
+	@printf "$(GREEN)>>> 初始化完成$(NC)\n"
+	@free -m | head -2
+	@printf "$(YELLOW)>>> 提醒: 请到云控制台【安全组】放行 $(PORT) 端口 (TCP)$(NC)\n"
+
+## 从构建包构建镜像并部署/更新服务 [VERSION=xxx, 回滚同样用此命令]
+deploy: secrets
+	@if [ -f $(IMAGE)-$(VERSION).tar.gz ]; then \
+		printf "$(YELLOW)>>> 解压构建包, 构建镜像 $(IMAGE):$(VERSION)...$(NC)\n"; \
+		rm -rf .build-$(VERSION); mkdir -p .build-$(VERSION); \
+		tar -xzf $(IMAGE)-$(VERSION).tar.gz -C .build-$(VERSION); \
+		docker build -t $(IMAGE):$(VERSION) .build-$(VERSION); \
+		rm -rf .build-$(VERSION) $(IMAGE)-$(VERSION).tar.gz; \
+	else \
+		printf "$(YELLOW)>>> 无新构建包, 使用本地镜像 $(IMAGE):$(VERSION)$(NC)\n"; \
+	fi
+	@printf "$(YELLOW)>>> 启动/更新服务 (compose)...$(NC)\n"
+	$(COMPOSE_ENV) docker compose up -d
+	@docker compose ps
+	@printf "$(GREEN)>>> 部署完成, 端口 $(PORT)$(NC)\n"
+
+## 使用官方发布镜像部署 [UPSTREAM_VERSION=vX.Y.Z 默认 latest]
+deploy-upstream: IMAGE := $(or $(UPSTREAM_IMAGE),calciumion/new-api)
+deploy-upstream: VERSION := $(or $(UPSTREAM_VERSION),latest)
+deploy-upstream: secrets
+	@printf "$(YELLOW)>>> 拉取镜像 $(IMAGE):$(VERSION)...$(NC)\n"
+	$(COMPOSE_ENV) docker compose pull new-api
+	@printf "$(YELLOW)>>> 启动/更新服务 (compose)...$(NC)\n"
+	$(COMPOSE_ENV) docker compose up -d
+	@docker compose ps
+	@printf "$(GREEN)>>> 部署完成, 端口 $(PORT)$(NC)\n"
+
+## 查看服务日志 [SERVICE=new-api|postgres|redis 默认全部]
+logs:
+	docker compose logs --tail=100 -f $(SERVICE)
+
+## 停止服务
+stop:
+	docker compose stop
+
+## 重启服务 [SERVICE=new-api 只重启应用]
+restart:
+	docker compose restart $(SERVICE)
+
+## 查看服务状态
+status:
+	@docker compose ps
+	@docker stats --no-stream 2>/dev/null | head -6 || true
+
+## 列出本地镜像历史版本 (回滚: make deploy VERSION=<tag>)
+versions:
+	@docker images $(IMAGE) --format "table {{.Tag}}\t{{.CreatedSince}}\t{{.Size}}"
+
+## 进入 PostgreSQL shell
+db-shell:
+	docker compose exec postgres psql -U root -d new-api
+
+## 进入 Redis shell
+redis-shell:
+	docker compose exec redis redis-cli -a "$$(grep '^REDIS_PASSWORD=' .env | cut -d= -f2)"
+
+## 清理镜像导出包和悬空镜像 (历史版本镜像不受影响)
+clean:
+	@rm -f $(IMAGE)-*.tar.gz
+	@docker image prune -f
+	@printf "$(GREEN)>>> 清理完成$(NC)\n"
