@@ -1,0 +1,98 @@
+<div class="lp">
+<style>
+.lp{--bg:#f8fafc;--card:#ffffff;--text:#0f172a;--muted:#64748b;--line:#e2e8f0;--brand:#6366f1;--brand2:#8b5cf6;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--text);background:var(--bg)}
+.dark .lp{--bg:#0b1020;--card:rgba(255,255,255,.04);--text:#e5e7eb;--muted:#94a3b8;--line:rgba(255,255,255,.08)}
+.lp *{box-sizing:border-box;margin:0;padding:0}
+.lp a{text-decoration:none;color:inherit}
+.lp .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+.lp .hero{position:relative;overflow:hidden;padding:96px 0 80px;text-align:center;background:radial-gradient(60% 50% at 50% 0%,rgba(99,102,241,.18),transparent 70%)}
+.lp .logo{width:72px;height:72px;border-radius:20px;box-shadow:0 8px 30px rgba(99,102,241,.35)}
+.lp h1{margin:28px 0 14px;font-size:clamp(34px,5.5vw,56px);font-weight:800;letter-spacing:-.02em;background:linear-gradient(90deg,var(--brand),var(--brand2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lp .sub{font-size:clamp(16px,2vw,20px);color:var(--muted);max-width:640px;margin:0 auto;line-height:1.7}
+.lp .cta{margin-top:36px;display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.lp .btn{display:inline-flex;align-items:center;gap:8px;padding:13px 30px;border-radius:999px;font-size:15px;font-weight:600;transition:transform .15s ease,box-shadow .15s ease}
+.lp .btn:hover{transform:translateY(-2px)}
+.lp .btn-p{color:#fff;background:linear-gradient(90deg,var(--brand),var(--brand2));box-shadow:0 6px 24px rgba(99,102,241,.4)}
+.lp .btn-g{border:1px solid var(--line);background:var(--card);color:var(--text)}
+.lp .sec{padding:64px 0}
+.lp .sec h2{font-size:clamp(24px,3.5vw,34px);font-weight:700;text-align:center;letter-spacing:-.01em}
+.lp .sec .tip{margin:12px auto 40px;text-align:center;color:var(--muted);max-width:560px;line-height:1.7}
+.lp .grid{display:grid;gap:20px}
+.lp .g3{grid-template-columns:repeat(3,1fr)}
+.lp .g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:860px){.lp .g3,.lp .g4{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.lp .g3,.lp .g4{grid-template-columns:1fr}}
+.lp .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px;transition:border-color .2s,transform .2s}
+.lp .card:hover{border-color:var(--brand);transform:translateY(-3px)}
+.lp .card .ic{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(139,92,246,.15));margin-bottom:16px}
+.lp .card h3{font-size:17px;font-weight:700;margin-bottom:8px}
+.lp .card p{font-size:14px;color:var(--muted);line-height:1.7}
+.lp .stat{text-align:center;padding:22px 10px}
+.lp .stat b{display:block;font-size:clamp(26px,3.5vw,38px);font-weight:800;background:linear-gradient(90deg,var(--brand),var(--brand2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lp .stat span{font-size:13px;color:var(--muted)}
+.lp .steps{counter-reset:s;max-width:720px;margin:0 auto}
+.lp .step{position:relative;padding:22px 22px 22px 72px;background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:14px}
+.lp .step::before{counter-increment:s;content:counter(s);position:absolute;left:22px;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;background:linear-gradient(135deg,var(--brand),var(--brand2))}
+.lp .step h3{font-size:16px;font-weight:700;margin-bottom:4px}
+.lp .step p{font-size:14px;color:var(--muted)}
+.lp .final{text-align:center;padding:72px 24px;background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(139,92,246,.12));border-top:1px solid var(--line)}
+.lp .final h2{font-size:clamp(24px,3.5vw,36px);font-weight:800;margin-bottom:14px}
+.lp .final p{color:var(--muted);margin-bottom:30px}
+</style>
+
+<section class="hero">
+  <div class="wrap">
+    <img class="logo" src="https://xiaoyule.com.cn/favicon.png" alt="戴墨镜的羊">
+    <h1>戴墨镜的羊</h1>
+    <p class="sub">稳定、高速的 Kimi K3 编程大模型 API 服务<br>兼容主流开发工具，注册即用，按量计费</p>
+    <div class="cta">
+      <a class="btn btn-p" href="/register">免费注册 →</a>
+      <a class="btn btn-g" href="/console">进入控制台</a>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <div class="wrap">
+    <div class="grid g4">
+      <div class="stat"><b>K3</b><span>最新编程模型</span></div>
+      <div class="stat"><b>7×24</b><span>稳定在线</span></div>
+      <div class="stat"><b>256K</b><span>超长上下文</span></div>
+      <div class="stat"><b>按量</b><span>透明计费</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <div class="wrap">
+    <h2>为什么选择我们</h2>
+    <p class="tip">专注编程场景的模型服务，为开发者打造</p>
+    <div class="grid g3">
+      <div class="card"><div class="ic">⚡</div><h3>极速响应</h3><p>优质线路接入官方接口，低延迟、高并发，编码补全流畅不卡顿。</p></div>
+      <div class="card"><div class="ic">🧠</div><h3>旗舰编程模型</h3><p>提供 Kimi K3、kimi-for-coding 等旗舰模型，支持 256K 超长上下文，轻松驾驭大型项目。</p></div>
+      <div class="card"><div class="ic">🔌</div><h3>广泛兼容</h3><p>标准 API 协议，兼容 Claude Code、各类 IDE 插件与开发工具，一行配置即可接入。</p></div>
+      <div class="card"><div class="ic">💰</div><h3>按量计费</h3><p>用多少付多少，费用明细实时可查，无隐藏消费。</p></div>
+      <div class="card"><div class="ic">🛡️</div><h3>稳定可靠</h3><p>多通道冗余架构，自动故障切换，保障服务持续可用。</p></div>
+      <div class="card"><div class="ic">📊</div><h3>用量透明</h3><p>控制台实时展示调用日志与消耗明细，每一笔花费都清清楚楚。</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <div class="wrap">
+    <h2>三步开始使用</h2>
+    <p class="tip">一分钟内完成接入</p>
+    <div class="steps">
+      <div class="step"><h3>注册账号</h3><p>点击「免费注册」，几秒完成账号创建。</p></div>
+      <div class="step"><h3>创建令牌</h3><p>在控制台「令牌」页面创建 API Key，按需设置额度与模型范围。</p></div>
+      <div class="step"><h3>接入使用</h3><p>将工具中的 API 地址指向本站，粘贴令牌即可开始调用。</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="final">
+  <h2>准备好开始了吗？</h2>
+  <p>立即注册，体验旗舰编程模型</p>
+  <a class="btn btn-p" href="/register">免费注册 →</a>
+</section>
+</div>
