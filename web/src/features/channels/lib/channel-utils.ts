@@ -821,3 +821,17 @@ export function formatChannelBalance(
   }
   return formatCurrencyFromUSD(balance, options)
 }
+
+/**
+ * Clamp an upstream plan window usage value into a displayable 0-100 percent.
+ * Non-finite or missing values degrade to 0 so the progress bar stays valid.
+ */
+export function normalizePlanWindowPercent(
+  value: number | null | undefined
+): number {
+  const v = Number(value)
+  if (!Number.isFinite(v)) {
+    return 0
+  }
+  return Math.min(100, Math.max(0, v))
+}

@@ -117,27 +117,37 @@ func TestGetDeepSeekBalanceUSD(t *testing.T) {
 
 func TestGetKimiCodingPlanBalance(t *testing.T) {
 	tests := []struct {
-		name            string
-		responseJSON    string
-		want            float64
-		wantMatched     bool
-		wantErrContains string
+		name                string
+		responseJSON        string
+		want                float64
+		wantMatched         bool
+		wantErrContains     string
+		wantFiveHourPercent *float64
+		wantFiveHourReset   string
+		wantWeeklyPercent   float64
+		wantWeeklyReset     string
 	}{
 		{
-			name: "parses weekly remaining from kimi coding plan usage",
+			name: "parses weekly remaining and both quota windows",
 			responseJSON: `{
 				"usage": {"limit": "100", "used": "35", "remaining": "65", "resetTime": "2026-09-29T01:16:59Z"},
 				"limits": [{"window": {"duration": 300, "timeUnit": "TIME_UNIT_MINUTE"}, "detail": {"limit": "100", "used": "8", "remaining": "92", "resetTime": "2026-09-23T11:16:59Z"}}],
 				"usages": {"limit_5h": {"used_ratio": 0.084046, "reset_time": "2026-09-23T11:16:59Z"}, "limit_7d": {"used_ratio": 0.351027, "reset_time": "2026-09-29T01:16:59Z"}}
 			}`,
-			want:        65,
-			wantMatched: true,
+			want:                65,
+			wantMatched:         true,
+			wantFiveHourPercent: common.GetPointer(8.4046),
+			wantFiveHourReset:   "2026-09-23T11:16:59Z",
+			wantWeeklyPercent:   35.1027,
+			wantWeeklyReset:     "2026-09-29T01:16:59Z",
 		},
 		{
-			name:         "matches exhausted plan with zero remaining",
-			responseJSON: `{"usage": {"limit": "100", "used": "100", "remaining": "0"}, "usages": {"limit_7d": {"used_ratio": 1}}}`,
-			want:         0,
-			wantMatched:  true,
+			name:              "matches exhausted plan with zero remaining",
+			responseJSON:      `{"usage": {"limit": "100", "used": "100", "remaining": "0"}, "usages": {"limit_7d": {"used_ratio": 1, "reset_time": "2026-09-29T01:16:59Z"}}}`,
+			want:              0,
+			wantMatched:       true,
+			wantWeeklyPercent: 100,
+			wantWeeklyReset:   "2026-09-29T01:16:59Z",
 		},
 		{
 			name:         "does not match when weekly ratio is absent",
@@ -177,11 +187,17 @@ func TestGetKimiCodingPlanBalance(t *testing.T) {
 			wantMatched:     true,
 			wantErrContains: "must be finite",
 		},
+		{
+			name:            "rejects negative five-hour used ratio",
+			responseJSON:    `{"usage": {"remaining": "65"}, "usages": {"limit_5h": {"used_ratio": -0.1}, "limit_7d": {"used_ratio": 0.35}}}`,
+			wantMatched:     true,
+			wantErrContains: "five-hour window",
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			balance, matched, err := getKimiCodingPlanBalance([]byte(test.responseJSON))
+			balance, planUsage, matched, err := getKimiCodingPlanBalance([]byte(test.responseJSON))
 			assert.Equal(t, test.wantMatched, matched)
 			if test.wantErrContains != "" {
 				require.Error(t, err)
@@ -190,8 +206,21 @@ func TestGetKimiCodingPlanBalance(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			if matched {
-				assert.InDelta(t, test.want, balance, 1e-12)
+			if !matched {
+				assert.Nil(t, planUsage)
+				return
+			}
+			assert.InDelta(t, test.want, balance, 1e-12)
+			require.NotNil(t, planUsage)
+			require.NotNil(t, planUsage.Weekly)
+			assert.InDelta(t, test.wantWeeklyPercent, planUsage.Weekly.UsedPercent, 1e-9)
+			assert.Equal(t, test.wantWeeklyReset, planUsage.Weekly.ResetTime)
+			if test.wantFiveHourPercent == nil {
+				assert.Nil(t, planUsage.FiveHour)
+			} else {
+				require.NotNil(t, planUsage.FiveHour)
+				assert.InDelta(t, *test.wantFiveHourPercent, planUsage.FiveHour.UsedPercent, 1e-9)
+				assert.Equal(t, test.wantFiveHourReset, planUsage.FiveHour.ResetTime)
 			}
 		})
 	}

@@ -55,9 +55,24 @@ type OpenAICreditGrants struct {
 
 const maxAdvancedCustomBalanceResponseBytes = 256 << 10
 
+// ChannelPlanWindowUsage describes one quota window of a subscription-style
+// upstream plan: how much is used (percent) and when the window resets.
+type ChannelPlanWindowUsage struct {
+	UsedPercent float64 `json:"used_percent"`
+	ResetTime   string  `json:"reset_time"`
+}
+
+// ChannelPlanUsage carries the quota windows of subscription-style upstream
+// plans (e.g. Kimi For Coding) alongside the numeric channel balance.
+type ChannelPlanUsage struct {
+	FiveHour *ChannelPlanWindowUsage `json:"five_hour,omitempty"`
+	Weekly   *ChannelPlanWindowUsage `json:"weekly,omitempty"`
+}
+
 type channelBalanceResult struct {
 	Balance     float64
 	RawResponse string
+	PlanUsage   *ChannelPlanUsage
 }
 
 type OpenAIUsageResponse struct {
@@ -420,6 +435,13 @@ func updateChannelMoonshotBalance(channel *model.Channel) (float64, error) {
 	return availableBalanceUsd, nil
 }
 
+// kimiCodingPlanWindow is one entry of the "usages" map in the Kimi For
+// Coding plan usage endpoint response.
+type kimiCodingPlanWindow struct {
+	UsedRatio float64 `json:"used_ratio"`
+	ResetTime string  `json:"reset_time"`
+}
+
 // kimiCodingPlanUsageResponse models the subset of the Kimi For Coding plan
 // usage endpoint (GET {base}/v1/usages) needed for balance tracking.
 type kimiCodingPlanUsageResponse struct {
@@ -427,36 +449,61 @@ type kimiCodingPlanUsageResponse struct {
 		Remaining string `json:"remaining"`
 	} `json:"usage"`
 	Usages struct {
-		Limit7d *struct {
-			UsedRatio float64 `json:"used_ratio"`
-		} `json:"limit_7d"`
+		Limit5h *kimiCodingPlanWindow `json:"limit_5h"`
+		Limit7d *kimiCodingPlanWindow `json:"limit_7d"`
 	} `json:"usages"`
 }
 
-// getKimiCodingPlanBalance extracts the weekly remaining quota from a Kimi For
-// Coding plan usage response. matched is false when the body does not have the
-// Kimi plan usage shape, in which case the caller falls back to raw display.
-// Only the weekly window maps to channel balance semantics: the five-hour
-// window resets too quickly to drive balance-based auto-ban.
-func getKimiCodingPlanBalance(body []byte) (balance float64, matched bool, err error) {
+// getKimiCodingPlanBalance extracts the weekly remaining quota and the quota
+// windows from a Kimi For Coding plan usage response. matched is false when
+// the body does not have the Kimi plan usage shape, in which case the caller
+// falls back to raw display. Only the weekly window maps to channel balance
+// semantics: the five-hour window resets too quickly to drive balance-based
+// auto-ban.
+func getKimiCodingPlanBalance(body []byte) (balance float64, planUsage *ChannelPlanUsage, matched bool, err error) {
 	var response kimiCodingPlanUsageResponse
 	if err := common.Unmarshal(body, &response); err != nil {
-		return 0, false, nil
+		return 0, nil, false, nil
 	}
 	if response.Usage.Remaining == "" || response.Usages.Limit7d == nil {
-		return 0, false, nil
+		return 0, nil, false, nil
 	}
 	balance, err = strconv.ParseFloat(response.Usage.Remaining, 64)
 	if err != nil {
-		return 0, true, err
+		return 0, nil, true, err
 	}
 	if math.IsNaN(balance) || math.IsInf(balance, 0) {
-		return 0, true, errors.New("kimi coding plan weekly remaining must be finite")
+		return 0, nil, true, errors.New("kimi coding plan weekly remaining must be finite")
 	}
 	if balance < 0 {
-		return 0, true, errors.New("kimi coding plan weekly remaining must be non-negative")
+		return 0, nil, true, errors.New("kimi coding plan weekly remaining must be non-negative")
 	}
-	return balance, true, nil
+
+	planUsage = &ChannelPlanUsage{}
+	if window := response.Usages.Limit5h; window != nil {
+		percent, err := kimiPlanWindowUsedPercent(window)
+		if err != nil {
+			return 0, nil, true, fmt.Errorf("kimi coding plan five-hour window: %w", err)
+		}
+		planUsage.FiveHour = &ChannelPlanWindowUsage{UsedPercent: percent, ResetTime: window.ResetTime}
+	}
+	percent, err := kimiPlanWindowUsedPercent(response.Usages.Limit7d)
+	if err != nil {
+		return 0, nil, true, fmt.Errorf("kimi coding plan weekly window: %w", err)
+	}
+	planUsage.Weekly = &ChannelPlanWindowUsage{UsedPercent: percent, ResetTime: response.Usages.Limit7d.ResetTime}
+	return balance, planUsage, true, nil
+}
+
+func kimiPlanWindowUsedPercent(window *kimiCodingPlanWindow) (float64, error) {
+	percent := window.UsedRatio * 100
+	if math.IsNaN(percent) || math.IsInf(percent, 0) {
+		return 0, errors.New("used ratio must be finite")
+	}
+	if percent < 0 {
+		return 0, errors.New("used ratio must be non-negative")
+	}
+	return percent, nil
 }
 
 func fetchAdvancedCustomBalance(channel *model.Channel) (channelBalanceResult, error) {
@@ -536,11 +583,11 @@ func fetchAdvancedCustomBalance(channel *model.Channel) (channelBalanceResult, e
 			}
 		}
 
-		if balance, matched, err := getKimiCodingPlanBalance(body); err != nil {
+		if balance, planUsage, matched, err := getKimiCodingPlanBalance(body); err != nil {
 			return channelBalanceResult{}, err
 		} else if matched {
 			channel.UpdateBalance(balance)
-			return channelBalanceResult{Balance: balance}, nil
+			return channelBalanceResult{Balance: balance, PlanUsage: planUsage}, nil
 		}
 	}
 
@@ -657,6 +704,9 @@ func UpdateChannelBalance(c *gin.Context) {
 	}
 	if result.RawResponse == "" {
 		response["balance"] = result.Balance
+		if result.PlanUsage != nil {
+			response["plan_usage"] = result.PlanUsage
+		}
 	} else {
 		response["raw_response"] = result.RawResponse
 	}

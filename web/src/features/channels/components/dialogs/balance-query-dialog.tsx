@@ -29,13 +29,32 @@ import {
 import { Dialog } from '@/components/dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import { IconBadge } from '@/components/ui/icon-badge'
-import { formatTimestampToDate } from '@/lib/format'
+import { Progress } from '@/components/ui/progress'
+import dayjs from '@/lib/dayjs'
+import {
+  formatDateTimeStr,
+  formatPercent,
+  formatTimestampToDate,
+} from '@/lib/format'
 import { handleServerError } from '@/lib/handle-server-error'
 import { createServerError } from '@/lib/server-error-message'
 
 import { getCodexUsage, updateChannelBalance } from '../../api'
-import { channelsQueryKeys, formatChannelBalance, isKimiCodingPlanChannel } from '../../lib'
+import {
+  channelsQueryKeys,
+  formatChannelBalance,
+  isKimiCodingPlanChannel,
+  normalizePlanWindowPercent,
+} from '../../lib'
+import type { ChannelPlanUsage, ChannelPlanWindowUsage } from '../../types'
 import { useChannels } from '../channels-provider'
 import {
   CodexUsageDialog,
@@ -46,6 +65,62 @@ type BalanceQueryDialogProps = {
   initialRawResponse?: string
   open: boolean
   onOpenChange: (open: boolean) => void
+}
+
+function formatPlanWindowResetTime(value: string | undefined): string {
+  if (!value) {
+    return '-'
+  }
+  const parsed = dayjs(value)
+  return parsed.isValid() ? formatDateTimeStr(parsed.toDate()) : '-'
+}
+
+function PlanWindowCard(props: {
+  title: string
+  window?: ChannelPlanWindowUsage
+}) {
+  const { t } = useTranslation()
+  const percent = normalizePlanWindowPercent(props.window?.used_percent)
+  const hasData = props.window != null
+
+  return (
+    <Card size='sm' className='gap-0 py-0'>
+      <CardHeader className='p-3 pb-2'>
+        <div className='flex items-start justify-between gap-3'>
+          <CardTitle className='text-sm font-semibold'>
+            {props.title}
+          </CardTitle>
+          <div className='shrink-0 text-right'>
+            <div className='text-xl leading-none font-semibold tabular-nums'>
+              {hasData ? formatPercent(percent) : '-'}
+            </div>
+            <div className='text-muted-foreground mt-1 text-[11px]'>
+              {t('Used')}
+            </div>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className='p-3 pt-0'>
+        {hasData ? (
+          <Progress
+            value={percent}
+            aria-label={`${props.title} usage: ${formatPercent(percent)}`}
+            className='mt-1'
+          />
+        ) : (
+          <div className='text-muted-foreground mt-1 text-sm'>-</div>
+        )}
+        <div className='mt-3'>
+          <CardDescription className='text-[11px]'>
+            {t('Reset at:')}
+          </CardDescription>
+          <div className='text-xs break-all tabular-nums'>
+            {formatPlanWindowResetTime(props.window?.reset_time)}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
 export function BalanceQueryDialog(props: BalanceQueryDialogProps) {
@@ -62,6 +137,7 @@ export function BalanceQueryDialog(props: BalanceQueryDialogProps) {
   )
   const [codexUsageResponse, setCodexUsageResponse] =
     useState<CodexUsageDialogData | null>(null)
+  const [planUsage, setPlanUsage] = useState<ChannelPlanUsage | null>(null)
 
   const isCodex = currentRow?.type === 57
   const isKimiPlan = currentRow ? isKimiCodingPlanChannel(currentRow) : false
@@ -102,6 +178,7 @@ export function BalanceQueryDialog(props: BalanceQueryDialogProps) {
 
         setBalance(newBalance)
         setBalanceUpdatedTime(now)
+        setPlanUsage(response.plan_usage ?? null)
         toast.success(t('Balance updated successfully'))
 
         // Update currentRow immediately with new balance and timestamp
@@ -133,6 +210,7 @@ export function BalanceQueryDialog(props: BalanceQueryDialogProps) {
     setBalanceUpdatedTime(null)
     setRawResponse(null)
     setCodexUsageResponse(null)
+    setPlanUsage(null)
     props.onOpenChange(false)
   }
 
@@ -230,6 +308,19 @@ export function BalanceQueryDialog(props: BalanceQueryDialogProps) {
                 )}
               </div>
             </div>
+
+            {isKimiPlan && planUsage ? (
+              <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
+                <PlanWindowCard
+                  title={t('5-Hour Window')}
+                  window={planUsage.five_hour}
+                />
+                <PlanWindowCard
+                  title={t('Weekly Window')}
+                  window={planUsage.weekly}
+                />
+              </div>
+            ) : null}
           </>
         )}
 

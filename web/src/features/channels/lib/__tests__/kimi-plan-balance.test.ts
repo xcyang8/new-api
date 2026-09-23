@@ -20,7 +20,7 @@ import { describe, expect, it } from 'vitest'
 
 import { formatCurrencyFromUSD } from '@/lib/currency'
 
-import { formatChannelBalance, isKimiCodingPlanChannel } from '../channel-utils'
+import { formatChannelBalance, isKimiCodingPlanChannel, normalizePlanWindowPercent } from '../channel-utils'
 
 const kimiPlanChannel = {
   type: 58,
@@ -86,5 +86,25 @@ describe('formatChannelBalance', () => {
     expect(formatChannelBalance(deepseekChannel, 63)).toBe(
       formatCurrencyFromUSD(63)
     )
+  })
+})
+
+describe('normalizePlanWindowPercent', () => {
+  it('keeps in-range percents unchanged', () => {
+    expect(normalizePlanWindowPercent(8.4046)).toBe(8.4046)
+    expect(normalizePlanWindowPercent(0)).toBe(0)
+    expect(normalizePlanWindowPercent(100)).toBe(100)
+  })
+
+  it('clamps out-of-range percents into 0-100', () => {
+    expect(normalizePlanWindowPercent(-3)).toBe(0)
+    expect(normalizePlanWindowPercent(105.2)).toBe(100)
+  })
+
+  it('degrades missing or non-finite values to 0', () => {
+    expect(normalizePlanWindowPercent(null)).toBe(0)
+    expect(normalizePlanWindowPercent(undefined)).toBe(0)
+    expect(normalizePlanWindowPercent(Number.NaN)).toBe(0)
+    expect(normalizePlanWindowPercent(Number.POSITIVE_INFINITY)).toBe(0)
   })
 })

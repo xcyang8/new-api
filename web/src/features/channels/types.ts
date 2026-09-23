@@ -201,12 +201,23 @@ export interface ChannelTestResponse {
   }
 }
 
+export interface ChannelPlanWindowUsage {
+  used_percent?: number
+  reset_time?: string
+}
+
+export interface ChannelPlanUsage {
+  five_hour?: ChannelPlanWindowUsage
+  weekly?: ChannelPlanWindowUsage
+}
+
 export interface ChannelBalanceResponse {
   success: boolean
   message?: string
   balance?: number
   currency?: string
   raw_response?: string
+  plan_usage?: ChannelPlanUsage
 }
 
 export interface FetchModelsResponse {
