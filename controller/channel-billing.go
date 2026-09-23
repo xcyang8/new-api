@@ -420,6 +420,45 @@ func updateChannelMoonshotBalance(channel *model.Channel) (float64, error) {
 	return availableBalanceUsd, nil
 }
 
+// kimiCodingPlanUsageResponse models the subset of the Kimi For Coding plan
+// usage endpoint (GET {base}/v1/usages) needed for balance tracking.
+type kimiCodingPlanUsageResponse struct {
+	Usage struct {
+		Remaining string `json:"remaining"`
+	} `json:"usage"`
+	Usages struct {
+		Limit7d *struct {
+			UsedRatio float64 `json:"used_ratio"`
+		} `json:"limit_7d"`
+	} `json:"usages"`
+}
+
+// getKimiCodingPlanBalance extracts the weekly remaining quota from a Kimi For
+// Coding plan usage response. matched is false when the body does not have the
+// Kimi plan usage shape, in which case the caller falls back to raw display.
+// Only the weekly window maps to channel balance semantics: the five-hour
+// window resets too quickly to drive balance-based auto-ban.
+func getKimiCodingPlanBalance(body []byte) (balance float64, matched bool, err error) {
+	var response kimiCodingPlanUsageResponse
+	if err := common.Unmarshal(body, &response); err != nil {
+		return 0, false, nil
+	}
+	if response.Usage.Remaining == "" || response.Usages.Limit7d == nil {
+		return 0, false, nil
+	}
+	balance, err = strconv.ParseFloat(response.Usage.Remaining, 64)
+	if err != nil {
+		return 0, true, err
+	}
+	if math.IsNaN(balance) || math.IsInf(balance, 0) {
+		return 0, true, errors.New("kimi coding plan weekly remaining must be finite")
+	}
+	if balance < 0 {
+		return 0, true, errors.New("kimi coding plan weekly remaining must be non-negative")
+	}
+	return balance, true, nil
+}
+
 func fetchAdvancedCustomBalance(channel *model.Channel) (channelBalanceResult, error) {
 	key := strings.TrimSpace(channel.Key)
 	info := &relaycommon.RelayInfo{
@@ -495,6 +534,13 @@ func fetchAdvancedCustomBalance(channel *model.Channel) (channelBalanceResult, e
 				channel.UpdateBalance(balance)
 				return channelBalanceResult{Balance: balance}, nil
 			}
+		}
+
+		if balance, matched, err := getKimiCodingPlanBalance(body); err != nil {
+			return channelBalanceResult{}, err
+		} else if matched {
+			channel.UpdateBalance(balance)
+			return channelBalanceResult{Balance: balance}, nil
 		}
 	}
 

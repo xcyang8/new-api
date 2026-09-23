@@ -114,3 +114,85 @@ func TestGetDeepSeekBalanceUSD(t *testing.T) {
 		})
 	}
 }
+
+func TestGetKimiCodingPlanBalance(t *testing.T) {
+	tests := []struct {
+		name            string
+		responseJSON    string
+		want            float64
+		wantMatched     bool
+		wantErrContains string
+	}{
+		{
+			name: "parses weekly remaining from kimi coding plan usage",
+			responseJSON: `{
+				"usage": {"limit": "100", "used": "35", "remaining": "65", "resetTime": "2026-09-29T01:16:59Z"},
+				"limits": [{"window": {"duration": 300, "timeUnit": "TIME_UNIT_MINUTE"}, "detail": {"limit": "100", "used": "8", "remaining": "92", "resetTime": "2026-09-23T11:16:59Z"}}],
+				"usages": {"limit_5h": {"used_ratio": 0.084046, "reset_time": "2026-09-23T11:16:59Z"}, "limit_7d": {"used_ratio": 0.351027, "reset_time": "2026-09-29T01:16:59Z"}}
+			}`,
+			want:        65,
+			wantMatched: true,
+		},
+		{
+			name:         "matches exhausted plan with zero remaining",
+			responseJSON: `{"usage": {"limit": "100", "used": "100", "remaining": "0"}, "usages": {"limit_7d": {"used_ratio": 1}}}`,
+			want:         0,
+			wantMatched:  true,
+		},
+		{
+			name:         "does not match when weekly ratio is absent",
+			responseJSON: `{"usage": {"limit": "100", "remaining": "65"}, "usages": {"limit_5h": {"used_ratio": 0.1}}}`,
+			wantMatched:  false,
+		},
+		{
+			name:         "does not match when weekly remaining is absent",
+			responseJSON: `{"usage": {"limit": "100"}, "usages": {"limit_7d": {"used_ratio": 0.35}}}`,
+			wantMatched:  false,
+		},
+		{
+			name:         "does not match null weekly ratio",
+			responseJSON: `{"usage": {"remaining": "65"}, "usages": {"limit_7d": null}}`,
+			wantMatched:  false,
+		},
+		{
+			name:         "does not match credit_summary response",
+			responseJSON: `{"object": "credit_summary", "total_available": 12.5}`,
+			wantMatched:  false,
+		},
+		{
+			name:            "returns parse error for non-numeric remaining",
+			responseJSON:    `{"usage": {"remaining": "abc"}, "usages": {"limit_7d": {"used_ratio": 0.35}}}`,
+			wantMatched:     true,
+			wantErrContains: "invalid syntax",
+		},
+		{
+			name:            "rejects negative remaining",
+			responseJSON:    `{"usage": {"remaining": "-5"}, "usages": {"limit_7d": {"used_ratio": 1.05}}}`,
+			wantMatched:     true,
+			wantErrContains: "must be non-negative",
+		},
+		{
+			name:            "rejects non-finite remaining",
+			responseJSON:    `{"usage": {"remaining": "NaN"}, "usages": {"limit_7d": {"used_ratio": 0.35}}}`,
+			wantMatched:     true,
+			wantErrContains: "must be finite",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			balance, matched, err := getKimiCodingPlanBalance([]byte(test.responseJSON))
+			assert.Equal(t, test.wantMatched, matched)
+			if test.wantErrContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), test.wantErrContains)
+				return
+			}
+
+			require.NoError(t, err)
+			if matched {
+				assert.InDelta(t, test.want, balance, 1e-12)
+			}
+		})
+	}
+}
