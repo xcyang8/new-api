@@ -113,4 +113,5 @@ incoming: /v1/dashboard/billing/credit_grants  →  upstream: /v1/usages
 - **周额度耗尽（remaining ≤ 0）时定时任务会自动禁用渠道**（"余额不足"）；5 小时窗口不参与余额语义（重置太快，避免误禁用）。
 - **auto-ban 不会自动恢复**：周额度重置后需在渠道页面手动重新启用（定时任务会跳过已禁用渠道）。
 - 非 Kimi 形状的响应仍走原始 JSON 展示逻辑，行为不变。
+- **余额显示为百分比**（2026-09-23 前端定制，`web/src/features/channels/lib/channel-utils.ts` 的 `formatChannelBalance`）：type=58 且 base_url 指向 `api.kimi.com/coding` 的渠道，余额是周配额点数（0-100），前端直接显示 `63%`；其他渠道仍按货币显示（USD→CNY 汇率换算）。判断函数 `isKimiCodingPlanChannel`，新增同类套餐渠道时 base_url 必须包含该域名才会走百分比显示。
 - 注意：DeepSeek 渠道（ID 5，type=43）余额查询原生可用，实测返回 CNY 余额并按美元汇率设置换算；按量计费 Kimi（`api.moonshot.cn`）需用 **Moonshot 渠道类型**，其余额端点 `/v1/users/me/balance` 与套餐端完全不同。
