@@ -6668,6 +6668,7 @@
     "Week": "本周",
     "Weekday": "星期",
     "Weekly": "每周",
+    "Weekly Quota Remaining": "周配额剩余",
     "Weekly token usage by model across the past few weeks": "最近几周内各模型的每周 Token 用量",
     "Weekly token usage by model across the past year": "过去一年内按模型分布的每周 Token 使用量",
     "Weekly token usage by model since launch": "自上线以来按模型分布的每周 Token 使用量",

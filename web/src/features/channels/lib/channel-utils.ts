@@ -16,8 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { formatCurrencyFromUSD, formatQuotaWithCurrency } from '@/lib/currency'
-import { formatTimestampToDate } from '@/lib/format'
+import {
+  formatCurrencyFromUSD,
+  formatQuotaWithCurrency,
+  type CurrencyFormatOptions,
+} from '@/lib/currency'
+import { formatPercent, formatTimestampToDate } from '@/lib/format'
 
 import {
   CHANNEL_STATUS_CONFIG,
@@ -778,4 +782,42 @@ export function deduplicateKeys(keysText: string): {
  */
 export function getKeyPromptForType(type: number): string {
   return TYPE_TO_KEY_PROMPT[type] || 'Enter API key for this channel'
+}
+
+// ============================================================================
+// Kimi For Coding Plan Balance
+// ============================================================================
+
+/** Advanced Custom channel type (backend constant.ChannelTypeAdvancedCustom). */
+const CHANNEL_TYPE_ADVANCED_CUSTOM = 58
+
+/**
+ * Kimi For Coding plan channels (Advanced Custom type pointing at
+ * api.kimi.com/coding) report weekly quota points (0-100) as balance,
+ * not money. Their balance must render as a percentage instead of going
+ * through USD currency conversion.
+ */
+export function isKimiCodingPlanChannel(channel: {
+  type: number
+  base_url?: string | null
+}): boolean {
+  return (
+    channel.type === CHANNEL_TYPE_ADVANCED_CUSTOM &&
+    (channel.base_url ?? '').toLowerCase().includes('api.kimi.com/coding')
+  )
+}
+
+/**
+ * Format a channel balance for display: percentage for Kimi For Coding plan
+ * channels, currency conversion for everything else.
+ */
+export function formatChannelBalance(
+  channel: { type: number; base_url?: string | null },
+  balance: number | null | undefined,
+  options?: CurrencyFormatOptions
+): string {
+  if (isKimiCodingPlanChannel(channel)) {
+    return formatPercent(balance)
+  }
+  return formatCurrencyFromUSD(balance, options)
 }

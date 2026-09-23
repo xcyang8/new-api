@@ -6668,6 +6668,7 @@
     "Week": "週",
     "Weekday": "曜日",
     "Weekly": "毎週",
+    "Weekly Quota Remaining": "Weekly Quota Remaining",
     "Weekly token usage by model across the past few weeks": "過去数週間にわたるモデル別の週次トークン使用量",
     "Weekly token usage by model across the past year": "過去1年のモデル別週次トークン使用量",
     "Weekly token usage by model since launch": "ローンチ以降のモデル別週次トークン使用量",

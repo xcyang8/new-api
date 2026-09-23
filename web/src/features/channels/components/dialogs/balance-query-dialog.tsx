@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQueryClient } from '@tanstack/react-query'
-import { Loader2, RefreshCw, DollarSign } from 'lucide-react'
+import { Loader2, RefreshCw, DollarSign, Percent } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -30,13 +30,12 @@ import { Dialog } from '@/components/dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { IconBadge } from '@/components/ui/icon-badge'
-import { formatCurrencyFromUSD } from '@/lib/currency'
 import { formatTimestampToDate } from '@/lib/format'
 import { handleServerError } from '@/lib/handle-server-error'
 import { createServerError } from '@/lib/server-error-message'
 
 import { getCodexUsage, updateChannelBalance } from '../../api'
-import { channelsQueryKeys } from '../../lib'
+import { channelsQueryKeys, formatChannelBalance, isKimiCodingPlanChannel } from '../../lib'
 import { useChannels } from '../channels-provider'
 import {
   CodexUsageDialog,
@@ -65,6 +64,7 @@ export function BalanceQueryDialog(props: BalanceQueryDialogProps) {
     useState<CodexUsageDialogData | null>(null)
 
   const isCodex = currentRow?.type === 57
+  const isKimiPlan = currentRow ? isKimiCodingPlanChannel(currentRow) : false
 
   const handleQueryCodexUsage = async () => {
     const row = currentRow
@@ -137,7 +137,7 @@ export function BalanceQueryDialog(props: BalanceQueryDialogProps) {
   }
 
   const formatBalance = (bal: number) =>
-    formatCurrencyFromUSD(bal, {
+    formatChannelBalance(currentRow, bal, {
       digitsLarge: 2,
       digitsSmall: 4,
       abbreviate: false,
@@ -210,9 +210,13 @@ export function BalanceQueryDialog(props: BalanceQueryDialogProps) {
             <div className='bg-muted/50 rounded-lg border p-4'>
               <div className='text-muted-foreground mb-2 flex items-center gap-2 text-sm'>
                 <IconBadge tone='success' size='xs'>
-                  <DollarSign />
+                  {isKimiPlan ? <Percent /> : <DollarSign />}
                 </IconBadge>
-                <span>{t('Current Balance')}</span>
+                <span>
+                  {isKimiPlan
+                    ? t('Weekly Quota Remaining')
+                    : t('Current Balance')}
+                </span>
               </div>
               <div className='text-2xl font-bold'>
                 {balance !== null
