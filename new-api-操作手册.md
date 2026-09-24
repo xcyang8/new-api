@@ -180,12 +180,15 @@ new-api 自带"价格同步"，无需自研：**左侧管理栏「模型」（/m
 
 ### 4.1 当前计费基准
 
-| 模型 | 计费方式 | 配置 | 用户实付 |
+| 模型 ID | 实际模型（官方文档） | 计费表达式 | 用户实付（$/M 输入/输出/缓存读） |
 |---|---|---|---|
-| kimi 系 6 个（k3 / k3[1m] / k3-256k / kimi-k3 / kimi-for-coding(-highspeed)） | tiered_expr 表达式 | `tier("base", p * 3 + c * 15 + cr * 0.3)` | 官方价 $3 / $15 / 缓存读 $0.3（$/M） |
-| deepseek-flash / deepseek-v4-pro | 比率表 | 见 3.2（已=官方价） | 官方价 |
+| k3 / k3[1m] / k3-256k / kimi-k3 | K3 | `tier("base", p * 3 + c * 15 + cr * 0.3)` | 3 / 15 / 0.3（官方按量价，一致 ✅） |
+| kimi-for-coding | **K2.8 Preview**（非 K3！官方无按量单价） | `tier("base", p * 0.95 + c * 4 + cr * 0.19)` | 0.95 / 4 / 0.19（按相邻 K2.7-code 第一方价定） |
+| kimi-for-coding-highspeed | **K2.7 Code HighSpeed**（快 5-6×，套餐 3× 配额） | `tier("base", p * 1.9 + c * 8 + cr * 0.38)` | 1.9 / 8 / 0.38（官方有精确按量价 kimi-k2.7-code-highspeed ✅） |
+| deepseek-flash / deepseek-v4-pro | — | 比率表（见 3.2，已=官方价） | 官方价 |
 
-- 2026-09-24 前 kimi 系是套餐符号价 `p * 0.01 + c * 0.01`（$0.01/M）。切换备份：`/app/new-api/backup/billing-expr-20260924-144800.bak`。
+- **模型 ID 映射以官方文档为准**：https://www.kimi.com/code/docs/en/kimi-code/models.html —— `kimi-for-coding` 实为 K2.8 Preview、`kimi-for-coding-highspeed` 实为 K2.7 Code HighSpeed，二者是套餐专属 ID；`k3` 系才是 K3。**不要按 ID 名字猜定价**。Moonshot 第一方按量全表（models.dev `moonshotai` provider）：kimi-k2.6 = 0.95/4/0.16，kimi-k2.7-code = 0.95/4/0.19，kimi-k2.7-code-highspeed = 1.9/8/0.38，kimi-k3 = 3/15/0.3。
+- 2026-09-24 前 kimi 系是套餐符号价 `p * 0.01 + c * 0.01`（$0.01/M）。切换备份：`/app/new-api/backup/billing-expr-20260924-144800.bak`；同日分模型修正前备份：`billing-expr-20260924-151200.bak`。
 - 表达式系数就是真实 $/1M 价（`pkg/billingexpr/expr.md`）：`p*3`=$3/M 输入；`cr` 引用后缓存读取从 p 中拆出按 $0.3/M 单独计，不引用则并入 p 按 $3 计。
 - 切换影响：用户余额是美元额度不变，但 Kimi 消耗速率约为符号价时期的 300 倍；预扣费同步变大，余额小的用户会更早触发额度不足。
 - 改 options 后 `SyncOptions` 60s 内自动生效，无需重启；/models/metadata 定价列即时显示 3/15。
