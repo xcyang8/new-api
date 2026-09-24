@@ -173,3 +173,39 @@ new-api 自带"价格同步"，无需自研：**左侧管理栏「模型」（/m
    - Kimi 按量（仅展示，计费走表达式）：可自动更新展示价；
    - 表达式计费模型（tiered_expr）一律跳过，不影响计费。
 5. **实现入口**：近期可用服务器 crontab + 脚本（调内部 API 需管理员 token，或直接改 options 走 3.2 的备份+SQL 路径）；长期宜做成 service 层功能 + 系统设置开关，与内置 ratio_sync 并存但走白名单源。
+
+---
+
+## 4. 计费基准与运营折扣（2026-09-24 起统一官方价）
+
+### 4.1 当前计费基准
+
+| 模型 | 计费方式 | 配置 | 用户实付 |
+|---|---|---|---|
+| kimi 系 6 个（k3 / k3[1m] / k3-256k / kimi-k3 / kimi-for-coding(-highspeed)） | tiered_expr 表达式 | `tier("base", p * 3 + c * 15 + cr * 0.3)` | 官方价 $3 / $15 / 缓存读 $0.3（$/M） |
+| deepseek-flash / deepseek-v4-pro | 比率表 | 见 3.2（已=官方价） | 官方价 |
+
+- 2026-09-24 前 kimi 系是套餐符号价 `p * 0.01 + c * 0.01`（$0.01/M）。切换备份：`/app/new-api/backup/billing-expr-20260924-144800.bak`。
+- 表达式系数就是真实 $/1M 价（`pkg/billingexpr/expr.md`）：`p*3`=$3/M 输入；`cr` 引用后缓存读取从 p 中拆出按 $0.3/M 单独计，不引用则并入 p 按 $3 计。
+- 切换影响：用户余额是美元额度不变，但 Kimi 消耗速率约为符号价时期的 300 倍；预扣费同步变大，余额小的用户会更早触发额度不足。
+- 改 options 后 `SyncOptions` 60s 内自动生效，无需重启；/models/metadata 定价列即时显示 3/15。
+
+### 4.2 运营折扣配置：官方价 × 0.8（分组倍率，推荐唯一杠杆）
+
+**机制（代码已验证）**：分组倍率 `GroupRatio` 对**比率表计费和表达式计费都生效**——比率路径 `model_ratio × group_ratio`；表达式路径 `ActualQuotaBeforeGroup × GroupRatio`（`relay/helper/price.go` `HandleGroupRatio` → `service/text_quota.go`）。
+
+**配置入口**：后台计费设置的分组倍率，即 options key `GroupRatio`(JSON)。当前值：
+```json
+{"default":1,"kimi":1,"deepseek":1,"bailian":1,"mimo":1}
+```
+
+**配法示例**：
+- 全场 8 折：`"kimi":0.8, "deepseek":0.8`（其余分组按需）
+- 仅 Kimi 8 折：只改 `"kimi":0.8`
+- 活动结束：改回 `1`
+
+**分组专属价（VIP 差异化）**：`group_ratio_setting.group_group_ratio` 配"用户分组 → 使用分组"专属倍率，如 vip 用户走 kimi 组 0.8、普通用户保持 1。命中专属倍率时覆盖普通分组倍率。
+
+**纪律**：
+- **只动倍率，不动基线**——官方价（表达式系数 / 比率表）保持官方原值，折扣全部走分组倍率；切勿把 0.8 乘进表达式或比率表（污染基线，下次价格同步会混乱）。
+- 预扣费与结算使用同一倍率，无差额风险；前端定价展示随所选分组倍率同步缩放，用户看到的就是折后价。
