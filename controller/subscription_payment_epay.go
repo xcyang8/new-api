@@ -100,7 +100,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 	uri, params, err := client.Purchase(&epay.PurchaseArgs{
 		Type:           req.PaymentMethod,
 		ServiceTradeNo: tradeNo,
-		Name:           fmt.Sprintf("ShadeSheep %s %s%s", plan.Title, operation_setting.GetCurrencySymbol(), strconv.FormatFloat(plan.PriceAmount, 'f', 2, 64)),
+		Name:           fmt.Sprintf("ShadeSheep %s ¥%s", plan.Title, strconv.FormatFloat(plan.PriceAmount, 'f', 2, 64)), // 易支付按人民币结算,符号固定 ¥
 		Money:          strconv.FormatFloat(plan.PriceAmount, 'f', 2, 64),
 		Device:         epay.PC,
 		NotifyUrl:      notifyUrl,

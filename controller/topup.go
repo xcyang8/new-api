@@ -311,7 +311,7 @@ func RequestEpay(c *gin.Context) {
 	uri, params, err := client.Purchase(&epay.PurchaseArgs{
 		Type:           req.PaymentMethod,
 		ServiceTradeNo: tradeNo,
-		Name:           fmt.Sprintf("ShadeSheep %s%s", operation_setting.GetCurrencySymbol(), strconv.FormatFloat(payMoney, 'f', 2, 64)),
+		Name:           fmt.Sprintf("ShadeSheep ¥%s", strconv.FormatFloat(payMoney, 'f', 2, 64)), // 易支付按人民币结算,符号固定 ¥,不随展示币种变化
 		Money:          strconv.FormatFloat(payMoney, 'f', 2, 64),
 		Device:         epay.PC,
 		NotifyUrl:      notifyUrl,
