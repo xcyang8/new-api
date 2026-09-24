@@ -1,6 +1,6 @@
 # new-api 操作手册
 
-生产站点：https://www.xiaoyule.com.cn/ （数羊 CountSheep）
+生产站点：https://www.xiaoyule.com.cn/ （ShadeSheep）
 
 ---
 
@@ -116,3 +116,34 @@ incoming: /v1/dashboard/billing/credit_grants  →  upstream: /v1/usages
 - **余额显示为百分比**（2026-09-23 前端定制，`web/src/features/channels/lib/channel-utils.ts` 的 `formatChannelBalance`）：type=58 且 base_url 指向 `api.kimi.com/coding` 的渠道，余额是周配额点数（0-100），前端直接显示 `63%`；其他渠道仍按货币显示（USD→CNY 汇率换算）。判断函数 `isKimiCodingPlanChannel`，新增同类套餐渠道时 base_url 必须包含该域名才会走百分比显示。
 - **余额弹窗显示双配额窗口**（2026-09-23，commit ed94986ba）：点"更新余额"后，后端除数字余额外还返回 `plan_usage`（`usages.limit_5h` / `limit_7d` 的 used_ratio 与 reset_time），弹窗渲染"5 小时窗口 / 周窗口"两张卡片（已用 % 进度条 + 重置时间）。Kimi 套餐只有这两个窗口，**接口无月额度数据**；`booster_wallet.monthlyChargeLimit` 是充值钱包的月充值上限（当前钱包禁用），不是套餐配额。
 - 注意：DeepSeek 渠道（ID 5，type=43）余额查询原生可用，实测返回 CNY 余额并按美元汇率设置换算；按量计费 Kimi（`api.moonshot.cn`）需用 **Moonshot 渠道类型**，其余额端点 `/v1/users/me/balance` 与套餐端完全不同。
+
+---
+
+## 3. 模型官方定价同步（2026-09-24 已执行）
+
+### 3.1 内置功能入口
+
+new-api 自带"价格同步"，无需自研：**左侧管理栏「模型」（/models，侧边栏模块 admin.models，prod 已开启）→ 页面右上「同步价格」按钮** → 选数据源 → 抓取 → 差异对比 → 勾选 → Apply Sync。
+
+内置数据源：models.dev 价格预设（聚合各厂商官方价，最推荐）、官方倍率预设（basellm.github.io）、OpenRouter `/v1/models`、其他 new-api 站点的 `/api/pricing`。
+
+⚠️ models.dev 转换逻辑（`controller/ratio_sync.go` 的 `convertModelsDevToRatioData`）在多家托管商间**选最低输入价**，不一定等于第一方官方价（如 kimi-k3 会被选成第三方 $2/M 而非 Moonshot 官方 $3/M）。要纯官方价需人工核对 provider=deepseek/moonshotai 的条目。
+
+### 3.2 本次执行（绕过 UI，用生产转换逻辑 + DB 合并）
+
+背景：`deepseek-flash`、`deepseek-v4-pro` 此前**完全无定价**（配置与内置默认表都没有），kimi-k3 无展示价。因管理 API 需管理员会话，改用等效路径：本地跑生产转换器 `convertModelsDevToRatioData` 验证数值 → 按**第一方官方价**合并进 options 表（备份 `pricing-options-20260924-140206.bak`)→ `SyncOptions` 每 60s 自动 reload，无需重启。
+
+写入值（model_ratio = 输入$/M ÷ 2,completion = 输出/输入，cache = 缓存读/输入）:
+
+| 模型 | ModelRatio | CompletionRatio | CacheRatio | 对应官方价（$/M 输入/输出） |
+|---|---|---|---|---|
+| deepseek-flash | 0.075 | 4 | 0.02 | 0.15 / 0.6 |
+| deepseek-v4-pro | 0.2175 | 2 | 0.0083 | 0.435 / 0.87 |
+| kimi-k3 | 1.5 | 5 | 0.1 | 3 / 15（仅展示，计费仍走表达式） |
+
+### 3.3 注意
+
+- Kimi 系模型（k3/k3[1m]/kimi-for-coding 等）计费是 `tiered_expr` 表达式（options `billing_setting.billing_expr`),**表达式优先于比率表**，同步比率不影响其计费，仅作展示参考。
+- DeepSeek 模型无表达式，比率表直接驱动计费；加价空间用**分组倍率**控制，不要改同步进来的基准值。
+- 历史日志确认 deepseek 两模型零调用，无定价盲区期损失。
+- 后续新增按量渠道：模型名与 models.dev 一致的，走 3.1 的 UI 同步即可；别名（如 k3）单独配。
