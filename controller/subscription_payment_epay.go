@@ -75,8 +75,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 		return
 	}
 
-	tradeNo := fmt.Sprintf("%s%d", common.GetRandomString(6), time.Now().Unix())
-	tradeNo = fmt.Sprintf("SUBUSR%dNO%s", userId, tradeNo)
+	tradeNo := common.GenerateTradeNo("SUB")
 
 	client := GetEpayClient()
 	if client == nil {
@@ -101,7 +100,7 @@ func SubscriptionRequestEpay(c *gin.Context) {
 	uri, params, err := client.Purchase(&epay.PurchaseArgs{
 		Type:           req.PaymentMethod,
 		ServiceTradeNo: tradeNo,
-		Name:           fmt.Sprintf("SUB:%s", plan.Title),
+		Name:           fmt.Sprintf("ShadeSheep %s %s%s", plan.Title, operation_setting.GetCurrencySymbol(), strconv.FormatFloat(plan.PriceAmount, 'f', 2, 64)),
 		Money:          strconv.FormatFloat(plan.PriceAmount, 'f', 2, 64),
 		Device:         epay.PC,
 		NotifyUrl:      notifyUrl,

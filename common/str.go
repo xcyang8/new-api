@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unsafe"
 
 	kitutil "github.com/QuantumNous/new-api/relaykit/relayconvert/kitutil"
@@ -36,6 +37,12 @@ func GetRandomString(length int) string {
 		return ""
 	}
 	return lo.RandomString(length, lo.AlphanumericCharset)
+}
+
+// GenerateTradeNo 生成支付商户订单号:业务前缀 + 14 位日期时间(服务器本地时间)
+// + 6 位随机数字,例如 TOP20260924153022123456。纯大写数字定长格式,便于对账与口述。
+func GenerateTradeNo(bizPrefix string) string {
+	return bizPrefix + time.Now().Format("20060102150405") + lo.RandomString(6, lo.NumbersCharset)
 }
 
 func MapToJsonStr(m map[string]any) string {

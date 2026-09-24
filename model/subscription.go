@@ -802,7 +802,7 @@ func PurchaseSubscriptionWithBalance(userId int, planId int) error {
 		}
 
 		now := common.GetTimestamp()
-		tradeNo := fmt.Sprintf("SUBBALUSR%dNO%s%d", userId, common.GetRandomString(6), time.Now().UnixNano())
+		tradeNo := common.GenerateTradeNo("SUB")
 		order := &SubscriptionOrder{
 			UserId:          userId,
 			PlanId:          plan.Id,
