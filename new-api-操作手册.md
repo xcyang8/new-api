@@ -147,3 +147,29 @@ new-api 自带"价格同步"，无需自研：**左侧管理栏「模型」（/m
 - DeepSeek 模型无表达式，比率表直接驱动计费；加价空间用**分组倍率**控制，不要改同步进来的基准值。
 - 历史日志确认 deepseek 两模型零调用，无定价盲区期损失。
 - 后续新增按量渠道：模型名与 models.dev 一致的，走 3.1 的 UI 同步即可；别名（如 k3）单独配。
+- **2026-09-24 浏览器实测 UI 同步**（yang 登录 → /models/metadata → 同步价格 → 勾选 models.dev 定价预设 → 确认选择）：差异表共 3573 行，搜索模型名过滤。`kimi-k3`、`deepseek-flash` 与已写入的官方价一致，差异表中**不出现**；`deepseek-v4-pro` 出现冲突行——当前 $0.435/$0.87（DeepSeek 官方）vs 预设 $0.348/$0.696（第三方最低价）。**该行不要勾选**，否则官方价被第三方价覆盖。确认无误后只勾选目标行 → 应用同步。
+
+### 3.4 官方定价来源（已核实，2026-09-24）
+
+| 厂商 | 官方定价页 | models.dev 第一方 provider key | 当前使用模型 | 官方价（$/M 输入/输出/缓存读） |
+|---|---|---|---|---|
+| DeepSeek | https://api-docs.deepseek.com/quick_start/pricing | `deepseek` | deepseek-flash、deepseek-v4-pro | flash：0.15 / 0.6 / 0.003；v4-pro：0.435 / 0.87 / 0.003625 |
+| Kimi 按量（Moonshot） | https://platform.kimi.com/docs/pricing/chat（旧域名 platform.moonshot.cn 已 301 至此；国际站 platform.moonshot.ai） | `moonshotai`、`moonshotai-cn` | kimi-k3 | 3 / 15 / 0.3 |
+| Kimi For Coding 套餐 | 套餐制无按量单价，档位见 https://www.kimi.com/code/docs/en/kimi-code/models.html | `kimi-code-plan-cn`、`kimi-code-plan-global`（api.json 中 k3/k3-256k cost 全 0） | k3、k3[1m]、k3-256k、kimi-for-coding(-highspeed) | 不计费，走配额（见第 2 节） |
+
+- 聚合数据源：`https://models.dev/api.json`（223 个 provider，含各厂商第一方条目，`doc` 字段指向其官方定价页）。
+- 已核对：上表第一方 provider 的价格与 3.2 写入 options 的值**完全一致**；差异来自转换器挑第三方最低价（3.1 ⚠️）。
+- 新增渠道时：先查 api.json 里该厂商的第一方 provider key（认准 `doc` 指向官方域名），以其价格为准。
+
+### 3.5 后续优化方向：官方价定时同步（构想，未实现）
+
+现状痛点：手动同步 + models.dev 转换器最低价偏差需人工甄别。优化方案：
+
+1. **定时抓取**：crontab 或系统内定时任务（如每日一次）拉取 `models.dev/api.json`。
+2. **第一方白名单过滤**：只取 3.4 表中的官方 provider key（`deepseek`、`moonshotai` 等），绕开"最低价"转换逻辑；新增渠道 = 白名单加一行。
+3. **差异对比**：按 ratio 公式换算后与 options 中 ModelRatio/CompletionRatio/CacheRatio 对比。
+4. **应用策略**：
+   - DeepSeek 系（比率表直接驱动计费）：有差异**仅告警**（通知/日志），人工确认后应用，变更留审计记录；
+   - Kimi 按量（仅展示，计费走表达式）：可自动更新展示价；
+   - 表达式计费模型（tiered_expr）一律跳过，不影响计费。
+5. **实现入口**：近期可用服务器 crontab + 脚本（调内部 API 需管理员 token，或直接改 options 走 3.2 的备份+SQL 路径）；长期宜做成 service 层功能 + 系统设置开关，与内置 ratio_sync 并存但走白名单源。
